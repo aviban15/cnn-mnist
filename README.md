@@ -28,67 +28,97 @@ This project implements a highly optimized CNN architecture for handwritten digi
 
 ## 🏗️ Model Architecture
 
-The optimized CNN model features a modern architecture with batch normalization, dropout regularization, and global average pooling:
+The optimized CNN model features a modern architecture with batch normalization, dropout regularization, and global average pooling. The architecture is strategically designed with **receptive field progression** to ensure the final classifier sees the entire image:
 
 ```
 Net(
-  (conv1): Conv2d(1, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  # Block 1
+  (conv1): Conv2d(1, 16, kernel_size=(3, 3), padding=(1, 1))     # 16×28×28 | RF: 3
   (bn1): BatchNorm2d(16)
-  (conv2): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  (conv2): Conv2d(16, 16, kernel_size=(3, 3), padding=(1, 1))    # 16×28×28 | RF: 5
   (bn2): BatchNorm2d(16)
-  (pool1): MaxPool2d(kernel_size=2, stride=2)
+  (pool1): MaxPool2d(kernel_size=2, stride=2)                    # 16×14×14 | RF: 6
   (drop1): Dropout2d(p=0.1)
   
-  (conv3): Conv2d(16, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  # Block 2
+  (conv3): Conv2d(16, 32, kernel_size=(3, 3), padding=(1, 1))    # 32×14×14 | RF: 10
   (bn3): BatchNorm2d(32)
-  (conv4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  (conv4): Conv2d(32, 32, kernel_size=(3, 3), padding=(1, 1))    # 32×14×14 | RF: 14
   (bn4): BatchNorm2d(32)
-  (pool2): MaxPool2d(kernel_size=2, stride=2)
+  (pool2): MaxPool2d(kernel_size=2, stride=2)                    # 32×7×7   | RF: 16
   (drop2): Dropout2d(p=0.1)
   
-  (conv5): Conv2d(32, 16, kernel_size=(1, 1), stride=(1, 1))  # 1x1 conv for channel reduction
+  # Block 3
+  (conv5): Conv2d(32, 16, kernel_size=(1, 1))                    # 16×7×7   | RF: 16 (1×1 conv)
   (bn5): BatchNorm2d(16)
-  (conv6): Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  (conv6): Conv2d(16, 16, kernel_size=(3, 3), padding=(1, 1))    # 16×7×7   | RF: 24
   (bn6): BatchNorm2d(16)
   
-  (gap1): AdaptiveAvgPool2d(output_size=(1, 1))  # Global Average Pooling
-  (fc1): Linear(in_features=16, out_features=10)
+  # Head
+  (gap1): AdaptiveAvgPool2d(output_size=(1, 1))                  # 16×1×1   | RF: 48 (GAP)
+  (fc1): Linear(in_features=16, out_features=10)                 # 10×1×1   | RF: 48
 )
 ```
 
+### Receptive Field Analysis:
+
+**Key Insight**: The architecture ensures that the **final receptive field (48×48) is larger than the input image (28×28)**, meaning the classifier effectively sees the entire image and beyond, enabling optimal feature extraction.
+
+| Block | Layer | Output Size | Receptive Field | Purpose |
+|-------|-------|-------------|-----------------|---------|
+| **Block 1** | conv1 | 16×28×28 | **3×3** | Initial feature detection |
+| | conv2 | 16×28×28 | **5×5** | Feature refinement |
+| | pool1 | 16×14×14 | **6×6** | Spatial downsampling |
+| **Block 2** | conv3 | 32×14×14 | **10×10** | Mid-level features |
+| | conv4 | 32×14×14 | **14×14** | Complex pattern recognition |
+| | pool2 | 32×7×7 | **16×16** | Further downsampling |
+| **Block 3** | conv5 (1×1) | 16×7×7 | **16×16** | Channel reduction |
+| | conv6 | 16×7×7 | **24×24** | High-level features |
+| **Head** | GAP | 16×1×1 | **48×48** | **Global context** |
+| | fc1 | 10×1×1 | **48×48** | **Final classification** |
+
 ### Architecture Details:
 
-| Layer | Type | Output Shape | Parameters |
-|-------|------|-------------|------------|
-| Conv2d-1 | Convolution (3×3, pad=1) | [-1, 16, 28, 28] | 160 |
-| BatchNorm2d-2 | Batch Normalization | [-1, 16, 28, 28] | 32 |
-| Conv2d-3 | Convolution (3×3, pad=1) | [-1, 16, 28, 28] | 2,320 |
-| BatchNorm2d-4 | Batch Normalization | [-1, 16, 28, 28] | 32 |
-| MaxPool2d-5 | Max Pooling (2×2) | [-1, 16, 14, 14] | 0 |
-| Dropout2d-6 | Dropout (p=0.1) | [-1, 16, 14, 14] | 0 |
-| Conv2d-7 | Convolution (3×3, pad=1) | [-1, 32, 14, 14] | 4,640 |
-| BatchNorm2d-8 | Batch Normalization | [-1, 32, 14, 14] | 64 |
-| Conv2d-9 | Convolution (3×3, pad=1) | [-1, 32, 14, 14] | 9,248 |
-| BatchNorm2d-10 | Batch Normalization | [-1, 32, 14, 14] | 64 |
-| MaxPool2d-11 | Max Pooling (2×2) | [-1, 32, 7, 7] | 0 |
-| Dropout2d-12 | Dropout (p=0.1) | [-1, 32, 7, 7] | 0 |
-| Conv2d-13 | **1×1 Convolution** | [-1, 16, 7, 7] | 528 |
-| BatchNorm2d-14 | Batch Normalization | [-1, 16, 7, 7] | 32 |
-| Conv2d-15 | Convolution (3×3, pad=1) | [-1, 16, 7, 7] | 2,320 |
-| BatchNorm2d-16 | Batch Normalization | [-1, 16, 7, 7] | 32 |
-| **AdaptiveAvgPool2d-17** | **Global Average Pooling** | [-1, 16, 1, 1] | 0 |
-| Linear-18 | Output Layer | [-1, 10] | 170 |
+| Layer | Type | Output Shape | Receptive Field | Parameters |
+|-------|------|-------------|-----------------|------------|
+| Conv2d-1 | Convolution (3×3, pad=1) | [-1, 16, 28, 28] | 3×3 | 160 |
+| BatchNorm2d-2 | Batch Normalization | [-1, 16, 28, 28] | 3×3 | 32 |
+| Conv2d-3 | Convolution (3×3, pad=1) | [-1, 16, 28, 28] | 5×5 | 2,320 |
+| BatchNorm2d-4 | Batch Normalization | [-1, 16, 28, 28] | 5×5 | 32 |
+| MaxPool2d-5 | Max Pooling (2×2) | [-1, 16, 14, 14] | 6×6 | 0 |
+| Dropout2d-6 | Dropout (p=0.1) | [-1, 16, 14, 14] | 6×6 | 0 |
+| Conv2d-7 | Convolution (3×3, pad=1) | [-1, 32, 14, 14] | 10×10 | 4,640 |
+| BatchNorm2d-8 | Batch Normalization | [-1, 32, 14, 14] | 10×10 | 64 |
+| Conv2d-9 | Convolution (3×3, pad=1) | [-1, 32, 14, 14] | 14×14 | 9,248 |
+| BatchNorm2d-10 | Batch Normalization | [-1, 32, 14, 14] | 14×14 | 64 |
+| MaxPool2d-11 | Max Pooling (2×2) | [-1, 32, 7, 7] | 16×16 | 0 |
+| Dropout2d-12 | Dropout (p=0.1) | [-1, 32, 7, 7] | 16×16 | 0 |
+| Conv2d-13 | **1×1 Convolution** | [-1, 16, 7, 7] | 16×16 | 528 |
+| BatchNorm2d-14 | Batch Normalization | [-1, 16, 7, 7] | 16×16 | 32 |
+| Conv2d-15 | Convolution (3×3, pad=1) | [-1, 16, 7, 7] | 24×24 | 2,320 |
+| BatchNorm2d-16 | Batch Normalization | [-1, 16, 7, 7] | 24×24 | 32 |
+| **AdaptiveAvgPool2d-17** | **Global Average Pooling** | [-1, 16, 1, 1] | **48×48** | 0 |
+| Linear-18 | Output Layer | [-1, 10] | **48×48** | 170 |
 
 **Total Parameters**: 19,642 (all trainable)
 **Model Size**: ~0.07 MB
 
 ### Key Architectural Features:
+- **Strategic Receptive Field Design**: Final RF (48×48) > Input size (28×28) for complete image coverage
 - **Batch Normalization**: Stabilizes training and enables higher learning rates
 - **Dropout Regularization**: Prevents overfitting with 10% dropout rate
 - **1×1 Convolution**: Reduces channels from 32 to 16, acting as a dimensionality reducer
-- **Global Average Pooling**: Replaces traditional flatten+FC layers, reducing parameters significantly
+- **Global Average Pooling**: Dramatically expands receptive field while reducing parameters
+- **Progressive Feature Extraction**: RF grows from 3×3 to 48×48 through carefully planned layers
 - **ReLU Activations**: Non-linearity after each convolution
 - **Log Softmax Output**: For NLL loss compatibility
+
+### Receptive Field Strategy:
+The architecture progression ensures optimal feature learning:
+1. **Local Features** (RF: 3×3 → 5×5): Edge and texture detection
+2. **Mid-level Features** (RF: 10×10 → 14×14): Shapes and digit parts  
+3. **High-level Features** (RF: 16×16 → 24×24): Digit patterns
+4. **Global Context** (RF: 48×48): Complete digit understanding
 
 ## 🚀 Iterative Improvements
 
@@ -99,9 +129,10 @@ The model achieved 99.4%+ accuracy through a systematic 4-step optimization proc
 - Added **Batch Normalization** layers after each convolution for training stability
 - Positioned convolutions in blocks with consistent channel progression (1→16→16, 16→32→32, 32→16→16)
 - Introduced **Global Average Pooling** to replace traditional fully connected layers
+- **Strategic Receptive Field Design**: Ensured final RF (48×48) exceeds input size (28×28) for complete image coverage
 - Structured the network with proper activation and pooling placement
 
-**Impact:** Baseline architecture achieving consistent 99.1%+ accuracy with improved training dynamics.
+**Impact:** Baseline architecture achieving consistent 99.1%+ accuracy with improved training dynamics and optimal receptive field coverage.
 
 ### Step 2: Regularization & Channel Optimization (→ 99.2%+ Accuracy)
 **Improvements Made:**
@@ -130,6 +161,7 @@ The model achieved 99.4%+ accuracy through a systematic 4-step optimization proc
 
 ### Optimization Summary:
 - **Parameter Efficiency**: Achieved high accuracy with only 19,642 parameters (< 20K target)
+- **Receptive Field Mastery**: Final RF (48×48) > input (28×28) ensures complete image understanding
 - **Modern Techniques**: Integrated batch normalization, dropout, GAP, and 1×1 convolutions
 - **Systematic Approach**: Each step built upon the previous, with measurable accuracy improvements
 - **Robust Training**: SGD + scheduler + augmentation created stable, high-performance training
